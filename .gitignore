@@ -1,0 +1,9 @@
+# Data files live in ADLS, not git - this repo only tracks the Databricks notebook code
+All_CSV/
+Combined/
+*.csv
+*.xls
+*.xlsx
+
+# Local tooling, not project content
+.claude/
