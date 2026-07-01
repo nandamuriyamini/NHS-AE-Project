@@ -7,7 +7,7 @@
 # MAGIC Wired up for this project's actual resources:
 # MAGIC - Storage account: `yaminiprojectadls`
 # MAGIC - 4 separate containers: `raw`, `bronze`, `silver`, `gold`
-# MAGIC - Key Vault: `kv-bd-training-uk`, secret `storage-account-key`
+# MAGIC - Key Vault: `kv-bd-training-uk`, secret `yamini-storage-account-key`
 # MAGIC - Databricks secret scope: `kv-bd-training-uk` (create it once via `#secrets/createScope` if you haven't)
 
 # COMMAND ----------
@@ -18,7 +18,7 @@ dbutils.widgets.text("bronze_container", "bronze", "Bronze container name")
 dbutils.widgets.text("silver_container", "silver", "Silver container name")
 dbutils.widgets.text("gold_container", "gold", "Gold container name")
 dbutils.widgets.text("kv_scope", "kv-bd-training-uk", "Key Vault-backed secret scope name")
-dbutils.widgets.text("kv_secret_key", "storage-account-key", "Secret name holding the storage key")
+dbutils.widgets.text("kv_secret_key", "yamini-storage-account-key", "Secret name holding the storage key")
 
 storage_account = dbutils.widgets.get("storage_account")
 raw_container = dbutils.widgets.get("raw_container")
@@ -56,6 +56,11 @@ gold_path = f"abfss://{gold_container}@{storage_account}.dfs.core.windows.net"
 spark.sql("CREATE DATABASE IF NOT EXISTS bronze")
 spark.sql("CREATE DATABASE IF NOT EXISTS silver")
 spark.sql("CREATE DATABASE IF NOT EXISTS gold")
+
+# Unity Catalog schemas (separate from the Hive databases above) for this project's
+# managed-table registration, under the shared adb_training_bd catalog.
+spark.sql("CREATE SCHEMA IF NOT EXISTS adb_training_bd.yamini_bronze")
+spark.sql("CREATE SCHEMA IF NOT EXISTS adb_training_bd.yamini_silver")
 
 # The 6 combined CSVs you uploaded into the raw container (matches the actual filenames there)
 DATASETS = {

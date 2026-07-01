@@ -14,12 +14,27 @@
 # COMMAND ----------
 
 import re
+import hashlib
 from pyspark.sql import functions as F
 
 def standardize_columns(df):
+    # Synapse Serverless SQL caps column names at 128 characters. The original NHS
+    # headers (group + child label combined in Bronze) can run well past that, e.g.
+    # "a_e_attendances_greater_than_4_hours_from_arrival_to_admission_transfer_or_..."
+    # Truncate anything over 100 chars and append a short hash so two long names that
+    # happen to share the same first 90 characters don't collide into duplicates.
     new_cols = []
+    seen = set()
     for c in df.columns:
         clean = re.sub(r"[^0-9a-zA-Z]+", "_", c).strip("_").lower()
+        if len(clean) > 100:
+            suffix = hashlib.md5(clean.encode()).hexdigest()[:6]
+            clean = f"{clean[:90]}_{suffix}"
+        base, i = clean, 1
+        while clean in seen:
+            clean = f"{base}_{i}"
+            i += 1
+        seen.add(clean)
         new_cols.append(clean)
     return df.toDF(*new_cols)
 
@@ -59,10 +74,22 @@ for table_name in DATASETS:
 # MAGIC %md
 # MAGIC Peek at the cleaned schema for each table — useful before writing Gold aggregations,
 # MAGIC since the long original NHS column headers get squashed into snake_case names here.
-# MAGIC (Reading straight from the Delta path — no metastore table needed.)
 
 # COMMAND ----------
 
 for table_name in DATASETS:
     print(f"\n--- {table_name} ---")
     spark.read.format("delta").load(f"{silver_path}/{table_name}").printSchema()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Register each Silver table as a Unity Catalog **managed** table under
+# MAGIC `adb_training_bd.yamini_silver`.
+
+# COMMAND ----------
+
+for table_name in DATASETS:
+    df = spark.read.format("delta").load(f"{silver_path}/{table_name}")
+    df.write.format("delta").mode("overwrite").saveAsTable(f"adb_training_bd.yamini_silver.{table_name}")
+    print(f"Registered: adb_training_bd.yamini_silver.{table_name}")

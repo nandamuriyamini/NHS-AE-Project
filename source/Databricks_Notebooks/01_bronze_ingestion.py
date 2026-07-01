@@ -43,12 +43,32 @@ for table_name, filename in DATASETS.items():
 
 # MAGIC %md
 # MAGIC Quick check — read every Bronze Delta path back and print its row count.
-# MAGIC (No metastore table registration needed — Unity Catalog requires a registered
-# MAGIC External Location for that, which this training workspace doesn't have set up.
-# MAGIC Reading straight from the Delta path works regardless.)
 
 # COMMAND ----------
 
 for table_name in DATASETS:
     n = spark.read.format("delta").load(f"{bronze_path}/{table_name}").count()
     print(f"{table_name}: {n} rows  ({bronze_path}/{table_name})")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Register each Bronze table as a Unity Catalog **managed** table under
+# MAGIC `adb_training_bd.yamini_bronze`. Managed tables don't need a registered External Location
+# MAGIC (unlike external tables), so this works even though this training workspace doesn't have a
+# MAGIC Storage Credential set up for `yaminiprojectadls`.
+
+# COMMAND ----------
+
+for table_name in DATASETS:
+    df = spark.read.format("delta").load(f"{bronze_path}/{table_name}")
+    (
+        df.write
+        .format("delta")
+        .mode("overwrite")
+        .option("delta.columnMapping.mode", "name")  # raw NHS headers have spaces/colons/parens, same as the Bronze path write above
+        .option("delta.minReaderVersion", "2")
+        .option("delta.minWriterVersion", "5")
+        .saveAsTable(f"adb_training_bd.yamini_bronze.{table_name}")
+    )
+    print(f"Registered: adb_training_bd.yamini_bronze.{table_name}")
